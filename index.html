@@ -16,6 +16,7 @@
 			--panel: #fff;
 		}
 		* { box-sizing: border-box; }
+		[hidden] { display: none !important; }
 		body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 		.shell { max-width: 1180px; margin: 0 auto; padding: 38px 24px 60px; }
 		.topline { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; margin-bottom: 26px; }
@@ -59,7 +60,7 @@
 		.identifier { font-weight: 750; letter-spacing: .01em; }
 		.date { white-space: nowrap; color: #536179; }
 		.status-cell { min-width: 190px; }
-		.status-select { min-width: 170px; min-height: 36px; padding: 6px 9px; font-size: 13px; }
+		.status-display { display: inline-block; min-width: 170px; padding: 6px 9px; border: 1px solid #dce3ee; border-radius: 9px; background: #fff; color: #33425a; font-size: 13px; }
 		.observation { width: 280px; max-width: 280px; overflow-wrap: anywhere; color: #65728a; font-size: 13px; }
 		.actions-cell { white-space: nowrap; }
 		.empty { padding: 35px 16px; color: var(--muted); text-align: center; }
@@ -150,6 +151,10 @@
 						<label for="status">Estado *</label>
 						<select id="status" name="status" required></select>
 					</div>
+					<div id="callTimeField" class="field" hidden>
+						<label for="callTime">Hora para ligar *</label>
+						<input id="callTime" name="callTime" type="time">
+					</div>
 					<div class="field observations">
 						<label for="observations">Observações</label>
 						<textarea id="observations" name="observations" placeholder="Ex.: falta CC, falta IBAN…"></textarea>
@@ -202,12 +207,15 @@
 		}).catch(error => console.error('Não foi possível iniciar o Firebase Analytics.', error));
 
 		const STORAGE_KEY = 'gestao-cpe-cui-registos';
+		const CALL_TIME_STATUS = 'LIGAR AS X HORAS';
 		const statuses = ['FAZER CHAMADA', 'NÃO ATENDE', 'LIGAR AS X HORAS', 'INSERIDA', 'AUDITORIA'];
 		const form = document.getElementById('recordForm');
 		const submitBtn = document.getElementById('submitBtn');
 		const cancelEditBtn = document.getElementById('cancelEditBtn');
 		const formTitle = document.getElementById('formTitle');
 		const statusInput = document.getElementById('status');
+		const callTimeField = document.getElementById('callTimeField');
+		const callTimeInput = document.getElementById('callTime');
 		const dateInput = document.getElementById('date');
 		const tbody = document.getElementById('records');
 		const empty = document.getElementById('empty');
@@ -249,10 +257,18 @@
 			cancelEditBtn.hidden = !record;
 		}
 
+		function syncCallTimeField(status, callTime) {
+			const needsCallTime = status === CALL_TIME_STATUS;
+			callTimeField.hidden = !needsCallTime;
+			callTimeInput.required = needsCallTime;
+			callTimeInput.value = needsCallTime ? (callTime || '') : '';
+		}
+
 		function resetForm() {
 			form.reset();
 			dateInput.value = new Date().toISOString().slice(0, 10);
 			statusInput.selectedIndex = 0;
+			syncCallTimeField(statusInput.value, '');
 			setFormMode(null);
 		}
 
@@ -261,6 +277,7 @@
 			document.getElementById('client').value = record.client || '';
 			dateInput.value = record.date || '';
 			statusInput.value = record.status || statuses[0];
+			syncCallTimeField(statusInput.value, record.callTime);
 			document.getElementById('observations').value = record.observations || '';
 			setFormMode(record);
 			formTitle.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -276,7 +293,7 @@
 		function render() {
 			const query = search.value.trim().toLocaleLowerCase('pt-PT');
 			const visible = records.filter(record =>
-				`${record.identifier} ${record.client} ${record.status} ${record.observations}`.toLocaleLowerCase('pt-PT').includes(query)
+				`${record.identifier} ${record.client} ${record.status} ${record.callTime || ''} ${record.observations}`.toLocaleLowerCase('pt-PT').includes(query)
 			);
 			tbody.replaceChildren();
 			visible.forEach(record => {
@@ -287,28 +304,13 @@
 
 				const statusCell = document.createElement('td');
 				statusCell.className = 'status-cell';
-				const select = document.createElement('select');
-				select.className = 'status-select';
-				select.setAttribute('aria-label', `Alterar estado de ${record.identifier}`);
-				statuses.forEach(status => select.add(new Option(status, status)));
-				select.value = record.status;
-				select.addEventListener('change', async () => {
-					try {
-						await setDoc(doc(db, 'users', activeUid, 'records', record.id), {
-							identifier: record.identifier,
-							client: record.client,
-							date: record.date,
-							status: select.value,
-							observations: record.observations || ''
-						});
-						setSyncMessage('Estado atualizado.');
-					} catch (error) {
-						console.error('Não foi possível atualizar o estado.', error);
-						setSyncMessage('Não foi possível atualizar o estado. Verifique a ligação e as regras do Firestore.', true);
-						render();
-					}
-				});
-				statusCell.append(select);
+				const statusDisplay = document.createElement('span');
+				statusDisplay.className = 'status-display';
+				const statusText = record.status === CALL_TIME_STATUS && record.callTime
+					? `LIGAR ÀS ${record.callTime}`
+					: (record.status || '—');
+				statusDisplay.textContent = statusText.toLocaleUpperCase('pt-PT');
+				statusCell.append(statusDisplay);
 				row.append(statusCell);
 				row.append(cell(record.observations, 'observation'));
 
@@ -386,12 +388,13 @@
 			if (toImport.length && window.confirm(`Encontrámos ${toImport.length} registo(s) guardado(s) neste navegador que ainda não estão na nuvem. Quer importá-los para esta conta?`)) {
 				for (const record of toImport) {
 					const id = typeof record.id === 'string' && !record.id.includes('/') ? record.id : doc(recordsRef).id;
-					const { identifier, client, date, status, observations } = record;
+					const { identifier, client, date, status, observations, callTime } = record;
 					await setDoc(doc(recordsRef, id), {
 						identifier,
 						client,
 						date: typeof date === 'string' ? date : '',
 						status: statuses.includes(status) ? status : statuses[0],
+						callTime: typeof callTime === 'string' ? callTime : '',
 						observations: typeof observations === 'string' ? observations : ''
 					});
 				}
@@ -434,6 +437,7 @@
 				client: data.get('client').trim(),
 				date: data.get('date'),
 				status: data.get('status'),
+				callTime: data.get('status') === CALL_TIME_STATUS ? data.get('callTime') : '',
 				observations: data.get('observations').trim()
 			};
 			const id = editingId || doc(collection(db, 'users', activeUid, 'records')).id;
@@ -451,6 +455,9 @@
 		});
 
 		cancelEditBtn.addEventListener('click', () => resetForm());
+		statusInput.addEventListener('change', () => {
+			syncCallTimeField(statusInput.value, '');
+		});
 		search.addEventListener('input', render);
 
 		onAuthStateChanged(auth, async user => {
