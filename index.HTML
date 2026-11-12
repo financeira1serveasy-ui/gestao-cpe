@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Gestão de CPE/CUI</title>
+	<style>
+		:root {
+			color-scheme: light;
+			--ink: #17233b;
+			--muted: #718096;
+			--line: #e5eaf2;
+			--blue: #315fe8;
+			--blue-dark: #244bc0;
+			--bg: #f4f7fc;
+			--panel: #fff;
+		}
+		* { box-sizing: border-box; }
+		body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+		.shell { max-width: 1180px; margin: 0 auto; padding: 38px 24px 60px; }
+		.topline { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; margin-bottom: 26px; }
+		.eyebrow { margin: 0 0 5px; color: var(--blue); font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+		h1 { margin: 0; font-size: clamp(26px, 4vw, 34px); letter-spacing: -.04em; }
+		.subtitle { margin: 7px 0 0; color: var(--muted); }
+		.header-actions { display: flex; align-items: center; gap: 10px; }
+		.count { padding: 9px 14px; border: 1px solid var(--line); border-radius: 12px; background: white; color: var(--muted); white-space: nowrap; }
+		.count strong { color: var(--ink); font-size: 18px; }
+		.panel { padding: 24px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); box-shadow: 0 8px 26px #23385c0a; }
+		.panel + .panel { margin-top: 20px; }
+		.panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+		h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
+		.form-grid { display: grid; grid-template-columns: 1.15fr 1.15fr 1fr 1fr; gap: 16px; }
+		.field { display: flex; flex-direction: column; gap: 6px; }
+		.field.observations { grid-column: 1 / -1; }
+		label { color: #48566e; font-size: 13px; font-weight: 650; }
+		input, select, textarea { width: 100%; border: 1px solid #dce3ee; border-radius: 9px; background: #fff; color: var(--ink); font: inherit; outline: none; transition: border-color .15s, box-shadow .15s; }
+		input, select { min-height: 43px; padding: 9px 11px; }
+		textarea { min-height: 82px; padding: 10px 11px; resize: vertical; }
+		input:focus, select:focus, textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px #315fe81a; }
+		.form-actions { display: flex; justify-content: flex-end; margin-top: 17px; }
+		button { border: 0; border-radius: 9px; cursor: pointer; font: inherit; font-weight: 700; transition: background .15s, transform .15s; }
+		button:active { transform: translateY(1px); }
+		.primary { padding: 11px 17px; background: var(--blue); color: white; }
+		.primary:hover { background: var(--blue-dark); }
+		.secondary { padding: 8px 11px; border: 1px solid #dce3ee; background: #fff; color: #33425a; font-size: 13px; }
+		.secondary:hover { background: #f3f6fb; }
+
+		.ghost { padding: 8px 12px; border: 1px solid #dce3ee; background: #fff; color: #33425a; font-size: 13px; }
+		.ghost:hover { background: #f3f6fb; }
+		.toolbar { display: flex; align-items: center; gap: 12px; }
+		.form-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+		.form-header-actions { display: flex; align-items: center; gap: 8px; }
+		.search { width: min(250px, 38vw); }
+		.table-wrap { overflow-x: auto; }
+		table { width: 100%; min-width: 1000px; border-collapse: collapse; text-align: left; }
+		th { padding: 11px 12px; border-bottom: 1px solid var(--line); color: #77849a; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+		td { padding: 14px 12px; border-bottom: 1px solid #edf0f5; vertical-align: middle; }
+		tbody tr:last-child td { border-bottom: 0; }
+		.identifier { font-weight: 750; letter-spacing: .01em; }
+		.date { white-space: nowrap; color: #536179; }
+		.status-cell { min-width: 190px; }
+		.status-select { min-width: 170px; min-height: 36px; padding: 6px 9px; font-size: 13px; }
+		.observation { width: 280px; max-width: 280px; overflow-wrap: anywhere; color: #65728a; font-size: 13px; }
+		.actions-cell { white-space: nowrap; }
+		.empty { padding: 35px 16px; color: var(--muted); text-align: center; }
+		.delete { padding: 7px 9px; color: #a53d4b; background: #fff2f3; font-size: 12px; }
+		.delete:hover { background: #ffe4e7; }
+		.notice { margin: 12px 0 0; color: var(--muted); font-size: 12px; }
+		.auth-message { min-height: 1.5em; margin: 12px 0 0; color: #a53d4b; font-size: 13px; }
+		.auth-actions { display: flex; gap: 10px; margin-top: 16px; }
+		#appContent { margin-top: 20px; }
+		@media (max-width: 760px) {
+			.shell { padding: 26px 15px 40px; }
+			.panel { padding: 18px; }
+			.form-grid { grid-template-columns: 1fr 1fr; }
+			.topline { align-items: center; }
+			.count { padding: 7px 10px; }
+		}
+		@media (max-width: 480px) {
+			.form-grid { grid-template-columns: 1fr; }
+			.field.observations { grid-column: auto; }
+			.topline { align-items: flex-start; }
+			.count { font-size: 12px; }
+			.header-actions { align-items: flex-end; flex-direction: column; }
+			.auth-actions { align-items: stretch; flex-direction: column; }
+			.toolbar { width: 100%; }
+			.toolbar .search { width: 100%; }
+		}
+	</style>
+</head>
+<body>
+	<main class="shell">
+		<header class="topline">
+			<div>
+				<p class="eyebrow">Gestão de clientes</p>
+				<h1>Registos CPE/CUI</h1>
+				<p class="subtitle">Acompanhe contactos, estados e informação em falta.</p>
+			</div>
+			<div class="header-actions">
+				<div class="count"><strong id="recordCount">0</strong> registos</div>
+				<button id="signOutBtn" class="ghost" type="button" hidden>Terminar sessão</button>
+			</div>
+		</header>
+
+		<section id="authPanel" class="panel" aria-labelledby="authTitle">
+			<div class="panel-heading"><h2 id="authTitle">Aceder à sua conta</h2></div>
+			<form id="authForm">
+				<div class="form-grid">
+					<div class="field">
+						<label for="email">Email *</label>
+						<input id="email" name="email" type="email" autocomplete="email" required>
+					</div>
+					<div class="field">
+						<label for="password">Palavra-passe *</label>
+						<input id="password" name="password" type="password" autocomplete="current-password" minlength="6" required>
+					</div>
+				</div>
+				<div class="auth-actions">
+					<button class="primary" type="submit">Entrar</button>
+					<button id="createAccountBtn" class="secondary" type="button">Criar conta</button>
+				</div>
+				<p id="authMessage" class="auth-message" role="status" aria-live="polite"></p>
+			</form>
+		</section>
+
+		<div id="appContent" hidden>
+		<p id="syncMessage" class="notice" role="status" aria-live="polite"></p>
+		<section class="panel" aria-labelledby="formTitle">
+			<div class="form-header">
+				<div class="panel-heading"><h2 id="formTitle">Adicionar registo</h2></div>
+				<div class="form-header-actions">
+					<button id="cancelEditBtn" class="ghost" type="button" hidden>Cancelar edição</button>
+				</div>
+			</div>
+			<form id="recordForm">
+				<div class="form-grid">
+					<div class="field">
+						<label for="identifier">CPE/CUI *</label>
+						<input id="identifier" name="identifier" placeholder="Ex.: PT0001000000000000AB" required>
+					</div>
+					<div class="field">
+						<label for="client">Cliente *</label>
+						<input id="client" name="client" placeholder="Nome do cliente" required>
+					</div>
+					<div class="field">
+						<label for="date">Data *</label>
+						<input id="date" name="date" type="date" required>
+					</div>
+					<div class="field">
+						<label for="status">Estado *</label>
+						<select id="status" name="status" required></select>
+					</div>
+					<div class="field observations">
+						<label for="observations">Observações</label>
+						<textarea id="observations" name="observations" placeholder="Ex.: falta CC, falta IBAN…"></textarea>
+					</div>
+				</div>
+				<div class="form-actions">
+					<button id="submitBtn" class="primary" type="submit">＋ Adicionar registo</button>
+				</div>
+			</form>
+		</section>
+
+		<section class="panel" aria-labelledby="listTitle">
+			<div class="panel-heading">
+				<h2 id="listTitle">Registos</h2>
+				<div class="toolbar"><input class="search" id="search" type="search" placeholder="Pesquisar cliente ou CPE/CUI…" aria-label="Pesquisar registos"></div>
+			</div>
+			<div class="table-wrap">
+				<table>
+					<thead><tr><th>CPE/CUI</th><th>Cliente</th><th>Data</th><th>Estado atual</th><th>Observações</th><th></th></tr></thead>
+					<tbody id="records"></tbody>
+				</table>
+				<div class="empty" id="empty">Ainda não existem registos. Utilize o formulário acima para começar.</div>
+			</div>
+			<p class="notice">Os registos são guardados na sua conta Firebase e sincronizados entre dispositivos.</p>
+		</section>
+		</div>
+	</main>
+
+	<script type="module">
+		import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+		import { getAnalytics, isSupported as isAnalyticsSupported } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-analytics.js";
+		import { createUserWithEmailAndPassword, getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+		import { collection, deleteDoc, doc, getDocs, getFirestore, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+
+		const firebaseConfig = {
+			apiKey: "AIzaSyDiQgoKWsRI79cFMB7QqMrp2ZfYqYd4nF0",
+			authDomain: "gestao-cpe.firebaseapp.com",
+			projectId: "gestao-cpe",
+			storageBucket: "gestao-cpe.firebasestorage.app",
+			messagingSenderId: "644488323595",
+			appId: "1:644488323595:web:f9158ef6321063a6fbdd0e",
+			measurementId: "G-JBZXGHVN1M"
+		};
+
+		const app = initializeApp(firebaseConfig);
+		const auth = getAuth(app);
+		const db = getFirestore(app);
+		isAnalyticsSupported().then(supported => {
+			if (supported) getAnalytics(app);
+		}).catch(error => console.error('Não foi possível iniciar o Firebase Analytics.', error));
+
+		const STORAGE_KEY = 'gestao-cpe-cui-registos';
+		const statuses = ['FAZER CHAMADA', 'NÃO ATENDE', 'LIGAR AS X HORAS', 'INSERIDA', 'AUDITORIA'];
+		const form = document.getElementById('recordForm');
+		const submitBtn = document.getElementById('submitBtn');
+		const cancelEditBtn = document.getElementById('cancelEditBtn');
+		const formTitle = document.getElementById('formTitle');
+		const statusInput = document.getElementById('status');
+		const dateInput = document.getElementById('date');
+		const tbody = document.getElementById('records');
+		const empty = document.getElementById('empty');
+		const search = document.getElementById('search');
+		const authForm = document.getElementById('authForm');
+		const authPanel = document.getElementById('authPanel');
+		const authMessage = document.getElementById('authMessage');
+		const appContent = document.getElementById('appContent');
+		const signOutBtn = document.getElementById('signOutBtn');
+		let records = [];
+		let editingId = null;
+		let activeUid = null;
+		let unsubscribeRecords = null;
+
+		statuses.forEach(status => statusInput.add(new Option(status, status)));
+		dateInput.value = new Date().toISOString().slice(0, 10);
+
+		function setSyncMessage(message, isError) {
+			const notice = document.getElementById('syncMessage');
+			if (!notice) return;
+			notice.textContent = message;
+			notice.style.color = isError ? '#a53d4b' : '';
+		}
+
+		function readLocalRecords() {
+			try {
+				const value = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+				return Array.isArray(value) ? value : [];
+			} catch (error) {
+				console.error('Não foi possível ler os registos guardados neste navegador.', error);
+				return [];
+			}
+		}
+
+		function setFormMode(record) {
+			editingId = record ? record.id : null;
+			formTitle.textContent = record ? 'Editar registo' : 'Adicionar registo';
+			submitBtn.textContent = record ? 'Guardar alterações' : '＋ Adicionar registo';
+			cancelEditBtn.hidden = !record;
+		}
+
+		function resetForm() {
+			form.reset();
+			dateInput.value = new Date().toISOString().slice(0, 10);
+			statusInput.selectedIndex = 0;
+			setFormMode(null);
+		}
+
+		function fillForm(record) {
+			document.getElementById('identifier').value = record.identifier || '';
+			document.getElementById('client').value = record.client || '';
+			dateInput.value = record.date || '';
+			statusInput.value = record.status || statuses[0];
+			document.getElementById('observations').value = record.observations || '';
+			setFormMode(record);
+			formTitle.scrollIntoView({ behavior: 'smooth', block: 'center' });
+		}
+
+		function cell(text, className) {
+			const td = document.createElement('td');
+			if (className) td.className = className;
+			td.textContent = text || '—';
+			return td;
+		}
+
+		function render() {
+			const query = search.value.trim().toLocaleLowerCase('pt-PT');
+			const visible = records.filter(record =>
+				`${record.identifier} ${record.client} ${record.status} ${record.observations}`.toLocaleLowerCase('pt-PT').includes(query)
+			);
+			tbody.replaceChildren();
+			visible.forEach(record => {
+				const row = document.createElement('tr');
+				row.append(cell(record.identifier, 'identifier'));
+				row.append(cell(record.client));
+				row.append(cell(record.date ? new Date(record.date + 'T00:00:00').toLocaleDateString('pt-PT') : '', 'date'));
+
+				const statusCell = document.createElement('td');
+				statusCell.className = 'status-cell';
+				const select = document.createElement('select');
+				select.className = 'status-select';
+				select.setAttribute('aria-label', `Alterar estado de ${record.identifier}`);
+				statuses.forEach(status => select.add(new Option(status, status)));
+				select.value = record.status;
+				select.addEventListener('change', async () => {
+					try {
+						await setDoc(doc(db, 'users', activeUid, 'records', record.id), {
+							identifier: record.identifier,
+							client: record.client,
+							date: record.date,
+							status: select.value,
+							observations: record.observations || ''
+						});
+						setSyncMessage('Estado atualizado.');
+					} catch (error) {
+						console.error('Não foi possível atualizar o estado.', error);
+						setSyncMessage('Não foi possível atualizar o estado. Verifique a ligação e as regras do Firestore.', true);
+						render();
+					}
+				});
+				statusCell.append(select);
+				row.append(statusCell);
+				row.append(cell(record.observations, 'observation'));
+
+				const actions = document.createElement('td');
+				actions.className = 'actions-cell';
+				const edit = document.createElement('button');
+				edit.type = 'button';
+				edit.className = 'secondary';
+				edit.textContent = 'Editar';
+				edit.style.marginRight = '8px';
+				edit.addEventListener('click', () => fillForm(record));
+				actions.append(edit);
+
+				const remove = document.createElement('button');
+				remove.type = 'button';
+				remove.className = 'delete';
+				remove.textContent = 'Apagar';
+				remove.setAttribute('aria-label', `Apagar registo ${record.identifier}`);
+				remove.addEventListener('click', async () => {
+					try {
+						await deleteDoc(doc(db, 'users', activeUid, 'records', record.id));
+						if (editingId === record.id) resetForm();
+						setSyncMessage('Registo apagado.');
+					} catch (error) {
+						console.error('Não foi possível apagar o registo.', error);
+						setSyncMessage('Não foi possível apagar o registo. Verifique a ligação e as regras do Firestore.', true);
+					}
+				});
+				actions.append(remove);
+				row.append(actions);
+				tbody.append(row);
+			});
+			document.getElementById('recordCount').textContent = records.length;
+			empty.hidden = visible.length > 0;
+			empty.textContent = records.length && !visible.length
+				? 'Nenhum registo corresponde à pesquisa.'
+				: 'Ainda não existem registos. Utilize o formulário acima para começar.';
+		}
+
+		async function authenticate(action) {
+			const email = document.getElementById('email').value.trim();
+			const password = document.getElementById('password').value;
+			authMessage.textContent = '';
+			try {
+				if (action === 'create') {
+					await createUserWithEmailAndPassword(auth, email, password);
+				} else {
+					await signInWithEmailAndPassword(auth, email, password);
+				}
+			} catch (error) {
+				console.error('Erro de autenticação Firebase.', error);
+				const messages = {
+					'auth/email-already-in-use': 'Este email já tem uma conta. Experimente iniciar sessão.',
+					'auth/invalid-email': 'O email indicado não é válido.',
+					'auth/invalid-credential': 'Email ou palavra-passe incorretos.',
+					'auth/weak-password': 'A palavra-passe deve ter pelo menos 6 caracteres.',
+					'auth/operation-not-allowed': 'Ative o método Email/palavra-passe na consola Firebase.',
+					'auth/network-request-failed': 'Sem ligação à internet. Verifique a ligação e tente novamente.'
+				};
+				authMessage.textContent = messages[error.code] || 'Não foi possível autenticar. Verifique a configuração Firebase e tente novamente.';
+			}
+		}
+
+		async function prepareUserRecords(user) {
+			const recordsRef = collection(db, 'users', user.uid, 'records');
+			const snapshot = await getDocs(recordsRef);
+			const existingIds = new Set(snapshot.docs.map(recordDoc => recordDoc.id));
+			const localRecords = readLocalRecords();
+			const toImport = localRecords.filter(record =>
+				typeof record.identifier === 'string' &&
+				typeof record.client === 'string' &&
+				!existingIds.has(typeof record.id === 'string' && !record.id.includes('/') ? record.id : '')
+			);
+
+			if (toImport.length && window.confirm(`Encontrámos ${toImport.length} registo(s) guardado(s) neste navegador que ainda não estão na nuvem. Quer importá-los para esta conta?`)) {
+				for (const record of toImport) {
+					const id = typeof record.id === 'string' && !record.id.includes('/') ? record.id : doc(recordsRef).id;
+					const { identifier, client, date, status, observations } = record;
+					await setDoc(doc(recordsRef, id), {
+						identifier,
+						client,
+						date: typeof date === 'string' ? date : '',
+						status: statuses.includes(status) ? status : statuses[0],
+						observations: typeof observations === 'string' ? observations : ''
+					});
+				}
+			}
+
+			if (activeUid !== user.uid) return;
+			unsubscribeRecords = onSnapshot(recordsRef, recordsSnapshot => {
+				records = recordsSnapshot.docs.map(recordDoc => ({ id: recordDoc.id, ...recordDoc.data() }));
+				if (editingId) {
+					const editedRecord = records.find(record => record.id === editingId);
+					if (!editedRecord) resetForm();
+				}
+				render();
+				setSyncMessage('Ligado ao Firebase. Os dados estão sincronizados.');
+			}, error => {
+				console.error('Erro ao sincronizar registos com o Firestore.', error);
+				setSyncMessage('Não foi possível sincronizar. Verifique as regras e a configuração do Firestore.', true);
+			});
+		}
+
+		authForm.addEventListener('submit', event => {
+			event.preventDefault();
+			authenticate('login');
+		});
+		document.getElementById('createAccountBtn').addEventListener('click', () => authenticate('create'));
+		signOutBtn.addEventListener('click', async () => {
+			try {
+				await signOut(auth);
+			} catch (error) {
+				console.error('Não foi possível terminar a sessão.', error);
+				setSyncMessage('Não foi possível terminar a sessão.', true);
+			}
+		});
+
+		form.addEventListener('submit', async event => {
+			event.preventDefault();
+			const data = new FormData(form);
+			const payload = {
+				identifier: data.get('identifier').trim(),
+				client: data.get('client').trim(),
+				date: data.get('date'),
+				status: data.get('status'),
+				observations: data.get('observations').trim()
+			};
+			const id = editingId || doc(collection(db, 'users', activeUid, 'records')).id;
+			submitBtn.disabled = true;
+			try {
+				await setDoc(doc(db, 'users', activeUid, 'records', id), payload);
+				setSyncMessage(editingId ? 'Alterações guardadas.' : 'Registo adicionado.');
+				if (!editingId) resetForm();
+			} catch (error) {
+				console.error('Não foi possível guardar o registo.', error);
+				setSyncMessage('Não foi possível guardar. Verifique a ligação e as regras do Firestore.', true);
+			} finally {
+				submitBtn.disabled = false;
+			}
+		});
+
+		cancelEditBtn.addEventListener('click', () => resetForm());
+		search.addEventListener('input', render);
+
+		onAuthStateChanged(auth, async user => {
+			if (unsubscribeRecords) {
+				unsubscribeRecords();
+				unsubscribeRecords = null;
+			}
+			activeUid = user ? user.uid : null;
+			records = [];
+			resetForm();
+			render();
+			authPanel.hidden = Boolean(user);
+			appContent.hidden = !user;
+			signOutBtn.hidden = !user;
+			if (!user) {
+				authMessage.textContent = '';
+				return;
+			}
+			setSyncMessage('A carregar os registos da sua conta…');
+			try {
+				await prepareUserRecords(user);
+			} catch (error) {
+				console.error('Não foi possível carregar os registos do Firestore.', error);
+				setSyncMessage('Erro ao carregar dados. Confirme se o Firestore está criado e se as regras foram publicadas.', true);
+			}
+		});
+	</script>
+</body>
+</html>
